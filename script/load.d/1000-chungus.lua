@@ -121,7 +121,15 @@ if clanarena then
     cs.maprotation("efficteam", ffamaps)
     -- rounds decide the match, keep the chungus map clock from cutting it short
     require "gamemods.chungus".config.game_length = 24 * 60
-    require "gamemods.clanarena".on({})
+    require "gamemods.clanarena".on({
+    ammo = {
+        [server.GUN_SG] = 30,
+        [server.GUN_CG] = 60,
+        [server.GUN_RL] = 99,
+        [server.GUN_RIFLE] = 15,
+        [server.GUN_GL] = 30,
+        [server.GUN_PISTOL] = 120,
+    },})
 else
     cs.maprotation("ffa effic tac teamplay efficteam tacteam", ffamaps,
         "regencapture capture hold effichold instahold", capturemaps,
