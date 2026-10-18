@@ -52,9 +52,9 @@ cs.serverauth = "spaghetti"
 table.insert(auth.preauths, "spaghetti")
 
 
-local admin_name = get_env_or_default("ADMIN_NAME", "kappachungus")
-local admin_domain = get_env_or_default("ADMIN_DOMAIN", "kappachungus.auth")
-local admin_public_key = get_env_or_default("ADMIN_PUBLIC_KEY", "+425ae6707d8c05dead7100fb2f73d44a9778081b6d77c54c")
+local admin_name = get_env_or_default("ADMIN_NAME", "27thLiz")
+local admin_domain = get_env_or_default("ADMIN_DOMAIN", "clan-arena")
+local admin_public_key = get_env_or_default("ADMIN_PUBLIC_KEY", "+02bdc364d968fee70455d7f51aaba21966d9198888ed8c0e")
 cs.adduser(admin_name, admin_domain, admin_public_key, "a")
 
 cs.publicserver = 2
@@ -68,7 +68,7 @@ spaghetti.addhook(server.N_SETMASTER,
 
 require "gamemods.chungus"
 
-cs.serverdesc = "kappapenis"
+cs.serverdesc = "clan-arena"
 
 cs.lockmaprotation = 2
 cs.ctftkpenalty = 0
@@ -116,9 +116,17 @@ ffamaps, capturemaps, ctfmaps = map.uv(function(maps)
     return table.concat(t, " ")
 end, ffamaps, capturemaps, ctfmaps)
 
-cs.maprotation("ffa effic tac teamplay efficteam tacteam", ffamaps,
-    "regencapture capture hold effichold instahold", capturemaps,
-    "ctf efficctf instactf protect efficprotect instaprotect", ctfmaps)
+local clanarena = os.getenv("CHUNGUS_MODE") == "clanarena"
+if clanarena then
+    cs.maprotation("efficteam", ffamaps)
+    -- rounds decide the match, keep the chungus map clock from cutting it short
+    require "gamemods.chungus".config.game_length = 24 * 60
+    require "gamemods.clanarena".on({})
+else
+    cs.maprotation("ffa effic tac teamplay efficteam tacteam", ffamaps,
+        "regencapture capture hold effichold instahold", capturemaps,
+        "ctf efficctf instactf protect efficprotect instaprotect", ctfmaps)
+end
 
 local fp, L, ents = require "utils.fp", require "utils.lambda", require "std.ents"
 local vec3 = require("utils.vec3");
@@ -157,8 +165,10 @@ spaghetti.addhook("entsloaded", function()
     currentflagswitch = true
 end)
 
---enable quad armour
-require "gamemods.quadarmour".on(1 / 2, 6, 0, 20000, 30000, server.A_GREEN, 100)
+--enable quad armour (spawns armour items, not in clan arena)
+if not clanarena then
+    require "gamemods.quadarmour".on(1 / 2, 6, 0, 20000, 30000, server.A_GREEN, 100)
+end
 
 local ents = require "std.ents", require "std.maploaded"
 require "std.pm"
