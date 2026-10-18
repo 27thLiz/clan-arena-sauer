@@ -163,7 +163,8 @@ local function checkround()
     local n, _, last = alive(team)
     if n == 1 and not lastwarned[team] and present(team) > 1 then
       lastwarned[team] = true
-      playermsg("\f3You are the last one standing!", last)
+      -- bots have no peer, sending to their clientnum crashes the engine
+      if last.state.aitype ~= server.AI_BOT then playermsg("\f3You are the last one standing!", last) end
     end
   end
 end
