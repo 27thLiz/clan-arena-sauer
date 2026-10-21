@@ -4,7 +4,7 @@
   Everyone spawns with every weapon and heavy armour, there are no items and no respawns during a round. The last team
   standing wins the round, first team to config.roundstowin rounds wins the map. Self-damage and friendly fire are off,
   so rocket/grenade jumping is free. Team score is rounds won, player frags/deaths stay real kills.
-  Mode must be efficteam (all weapons, no items, teams), the hooks are no-ops in any other mode.
+  Mode must be efficctf (all weapons, no items, teams), the hooks are no-ops in any other mode.
 
 ]]--
 
@@ -199,7 +199,7 @@ function module.on(cfg)
 
   hooks.changemap = spaghetti.addhook("changemap", function()
     laters = {}  -- game laters are freed by the engine on map change
-    enabled, phase, round = server.m_efficiency and server.m_teammode, "ended", 0
+    enabled, phase, round = server.m_efficiency and server.m_ctf and not server.m_hold and not server.m_protect, "ended", 0
     if not enabled then return end
     wins = { [config.teams[1]] = 0, [config.teams[2]] = 0 }
     syncscores()
@@ -268,6 +268,11 @@ function module.on(cfg)
     end
     queuecheck()
   end)
+
+  -- the ctf mode is only there for the radar, flags stay put
+  local function blockflags(info) if enabled then info.skip = true end end
+  hooks.takeflag = spaghetti.addhook(server.N_TAKEFLAG, blockflags)
+  hooks.trydropflag = spaghetti.addhook(server.N_TRYDROPFLAG, blockflags)
 
   hooks.setteam = spaghetti.addhook(server.N_SETTEAM, blockteams)
   hooks.switchteam = spaghetti.addhook(server.N_SWITCHTEAM, blockteams)
