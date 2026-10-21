@@ -4,11 +4,14 @@
   Everyone spawns with every weapon and heavy armour, there are no items and no respawns during a round. The last team
   standing wins the round, first team to config.roundstowin rounds wins the map. Self-damage and friendly fire are off,
   so rocket/grenade jumping is free. Team score is rounds won, player frags/deaths stay real kills.
-  Mode must be efficctf (all weapons, no items, teams), the hooks are no-ops in any other mode.
+  Dead players are moved to spectator (benched) config.benchdelay seconds after dying and put back on their team when
+  the next round starts.
+  Mode must be effichold (all weapons, no items, teams, ctf radar), the hooks are no-ops in any other mode. Hold rather
+  than ctf because clients pick team spawns in ctf, and ffa maps without them stack everyone on one spot.
 
 ]]--
 
-local fp, L, iterators, playermsg, putf, spawn, setteamscore, settime, commands, sound = require"utils.fp", require"utils.lambda", require"std.iterators", require"std.playermsg", require"std.putf", require"std.spawn", require"std.setteamscore", require"std.settime", require"std.commands", require"std.sound"
+local fp, L, iterators, playermsg, putf, spawn, setteamscore, settime, commands, sound, setteam, uuid = require"utils.fp", require"utils.lambda", require"std.iterators", require"std.playermsg", require"std.putf", require"std.spawn", require"std.setteamscore", require"std.settime", require"std.commands", require"std.sound", require"std.setteam", require"std.uuid"
 local map = fp.map
 
 require"std.notalive"
@@ -19,6 +22,7 @@ local module = {
     roundtime = 120,  -- seconds
     warmup = 10,      -- seconds, damage immune, movement allowed
     roundgap = 5,     -- seconds between rounds
+    benchdelay = 2,   -- seconds from death to spectator, false = stay dead until next round
     health = 200,
     armour = 200,
     armourtype = server.A_YELLOW,
@@ -29,7 +33,7 @@ local module = {
 }
 
 local hooks, laters, config, enabled = {}, {}
-local phase, wins, round, lastwarned = "ended", {}, 0, {}
+local phase, wins, round, lastwarned, restoring = "ended", {}, 0, {}, false
 local tryround, endround
 
 -- timers are tracked by key and forgotten when they fire, so a stale token is never cancelled
@@ -57,6 +61,7 @@ end
 local function present(team)
   local n = 0
   for ci in iterators.players() do if ci.team == team then n = n + 1 end end
+  for ci in iterators.spectators() do if ci.extra.cabench == team then n = n + 1 end end
   return n
 end
 
@@ -91,8 +96,39 @@ local function forcedeath(ci)
   engine.sendpacket(-1, 1, putf({ 10, r = 1 }, server.N_FORCEDEATH, ci.clientnum):finalize(), -1)
 end
 
+local function inround()
+  return phase == "warmup" or phase == "live"
+end
+
+-- server.forcespectator without aiman::removeai: a benched owner keeps simulating its bots, else with no other
+-- human playing they would be left ownerless and frozen
+local function bench(ci)
+  if ci.state.aitype ~= server.AI_NONE or ci.state.state ~= engine.CS_DEAD or not inround() then return end
+  ci.extra.cabench = ci.team
+  if server.smode then server.smode:leavegame(ci, false) end
+  ci.state.state = engine.CS_SPECTATOR
+  ci.state.timeplayed = ci.state.timeplayed + engine.lastmillis - ci.state.lasttimeplayed
+  engine.sendpacket(-1, 1, putf({ 10, r = 1 }, server.N_SPECTATOR, ci.clientnum, 1):finalize(), -1)
+  playermsg("\f2You are spectating until the next round.", ci)
+end
+
+local function unbenchall()
+  if not enabled then return end
+  for ci in iterators.spectators() do
+    local team = ci.extra.cabench
+    if team then
+      ci.extra.cabench = nil
+      restoring = true
+      server.unspectate(ci)
+      restoring = false
+      if isteam(team) and ci.team ~= team then setteam.set(ci, team, -1) end
+    end
+  end
+end
+
 local function startround()
   cancellaters()
+  unbenchall()
   round, phase, lastwarned = round + 1, "warmup", {}
   for ci in iterators.players() do
     if ci.state.state == engine.CS_ALIVE then
@@ -175,6 +211,17 @@ local function queuecheck()
   if enabled then later("check", 1, checkround) end
 end
 
+-- returns true if the client will be benched, the timer dies with the round on cancellaters()
+local function schedulebench(ci)
+  if not config.benchdelay or ci.state.aitype ~= server.AI_NONE or not inround() then return false end
+  local id, r = ci.extra.uuid, round
+  later("bench" .. id, config.benchdelay * 1000, function()
+    local ci = uuid.find(id)
+    if ci and round == r then bench(ci) end
+  end)
+  return true
+end
+
 local function blockteams(info)
   if info.skip or not enabled then return end
   local team = engine.filtertext(info.text, false):sub(1, server.MAXTEAMLEN)
@@ -199,15 +246,15 @@ function module.on(cfg)
 
   hooks.changemap = spaghetti.addhook("changemap", function()
     laters = {}  -- game laters are freed by the engine on map change
-    enabled, phase, round = server.m_efficiency and server.m_ctf and not server.m_hold and not server.m_protect, "ended", 0
+    enabled, phase, round = server.m_efficiency and server.m_hold, "ended", 0
     if not enabled then return end
     wins = { [config.teams[1]] = 0, [config.teams[2]] = 0 }
     syncscores()
     settime.set(24 * 60 * 60 * 1000)
     tryround()
   end)
-  hooks.prechangemap = spaghetti.addhook("prechangemap", function() cancellaters() phase = "ended" end)
-  hooks.intermission = spaghetti.addhook("intermission", function() cancellaters() phase = "ended" end)
+  hooks.prechangemap = spaghetti.addhook("prechangemap", function() cancellaters() phase = "ended" unbenchall() end)
+  hooks.intermission = spaghetti.addhook("intermission", function() cancellaters() phase = "ended" unbenchall() end)
 
   hooks.spawnstate = spaghetti.addhook("spawnstate", function(info)
     if info.skip or not enabled then return end
@@ -240,21 +287,22 @@ function module.on(cfg)
     info.skip = true
   end)
 
-  hooks.notalive = spaghetti.addhook("notalive", function()
+  hooks.notalive = spaghetti.addhook("notalive", function(info)
     if not enabled then return end
     syncscores()
     queuecheck()
+    schedulebench(info.ci)
   end)
   hooks.clientdisconnect = spaghetti.addhook("clientdisconnect", queuecheck)
   hooks.botleave = spaghetti.addhook("botleave", queuecheck)
   hooks.botjoin = spaghetti.addhook("botjoin", queuecheck)
 
   hooks.specstate = spaghetti.addhook("specstate", function(info)
-    if not enabled then return end
+    if not enabled or restoring then return end
     local ci = info.ci
     if ci.state.state ~= engine.CS_SPECTATOR then
       if phase == "warmup" then spawn(ci)
-      elseif phase ~= "freeplay" then playermsg("\f2Round in progress, you will spawn next round.", ci) end
+      elseif phase ~= "freeplay" and not schedulebench(ci) then playermsg("\f2Round in progress, you will spawn next round.", ci) end
     end
     queuecheck()
   end)
@@ -264,12 +312,23 @@ function module.on(cfg)
     -- the welcome packet spawns non spectators, take it back mid-round
     if ci.state.state ~= engine.CS_SPECTATOR and phase ~= "warmup" and phase ~= "freeplay" then
       forcedeath(ci)
-      playermsg("\f2Round in progress, you will spawn next round.", ci)
+      if not schedulebench(ci) then playermsg("\f2Round in progress, you will spawn next round.", ci) end
     end
     queuecheck()
   end)
 
-  -- the ctf mode is only there for the radar, flags stay put
+  -- benched players come back on round start, spectating again opts out of that
+  hooks.spectator = spaghetti.addhook(server.N_SPECTATOR, function(info)
+    if info.skip or not enabled or not info.spinfo or not info.spinfo.extra.cabench then return end
+    if info.spectator ~= info.sender and info.ci.privilege == server.PRIV_NONE then return end
+    info.skip = true
+    if info.val == 0 then playermsg("\f2You will be back next round.", info.spinfo) return end
+    info.spinfo.extra.cabench = nil
+    playermsg("\f2You will stay in spectator.", info.spinfo)
+    queuecheck()
+  end)
+
+  -- the hold mode is only there for the radar, the flag stays put
   local function blockflags(info) if enabled then info.skip = true end end
   hooks.takeflag = spaghetti.addhook(server.N_TAKEFLAG, blockflags)
   hooks.trydropflag = spaghetti.addhook(server.N_TRYDROPFLAG, blockflags)
@@ -281,6 +340,7 @@ function module.on(cfg)
     playermsg("\f2Clan Arena\f7: everyone spawns with every weapon, " .. config.health .. " health and " .. config.armour .. " armour. There are no items.", info.ci)
     playermsg("\f7No respawns during a round: eliminate the other team to win it. First team to \f0" .. config.roundstowin .. "\f7 rounds wins the map.", info.ci)
     playermsg("\f7No self-damage (rocket/grenade jump freely) and no friendly fire. Rounds last " .. config.roundtime .. "s, then the team with more players alive wins.", info.ci)
+    playermsg("\f7Dead players spectate until the next round. Use \f0/spectator 1\f7 while spectating to stay out.", info.ci)
   end, "#rules: Clan Arena rules")
 end
 
