@@ -84,6 +84,22 @@ commands.add("rules", function(info)
         info.ci)
 end)
 
+commands.add("persist", function(info)
+        if info.ci.privilege < server.PRIV_MASTER then playermsg("Access denied.", info.ci) return end
+        if info.args == "" then
+            playermsg("\f6Info\f7: Persist teams is " .. (cs.persistteams == 1 and "enabled" or "disabled") .. ".", info.ci)
+            return
+        end
+        local arg = tonumber(info.args)
+        if arg ~= 0 and arg ~= 1 then playermsg("Invalid persist value", info.ci) return end
+        if cs.persistteams == arg then return end
+        cs.persistteams = arg
+        server.sendservmsg(server.colorname(info.ci, nil) ..
+            (arg == 1 and " enabled" or " disabled") .. " \f1persist teams\f7 ")
+    end,
+    "Usage: #persist [0|1]")
+
+
 local function startmatch()
     module.on()
     server.rotatemap(true)

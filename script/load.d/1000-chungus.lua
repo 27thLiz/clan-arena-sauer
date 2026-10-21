@@ -7,7 +7,7 @@
 if not os.getenv("CHUNGUS") then return end
 engine.writelog(("[chungusmod][INFO] event=configuration_applied container_id=%s"):format(
     os.getenv("HOSTNAME") or "unknown"))
-server.mastermode = server.MM_OPEN
+server.mastermode = server.MM_LOCKED
 -- engine.sendpacket(-1, 1, putf({ r = true }, server.N_MASTERMODE, server.mastermode):finalize(), -1)
 
 
@@ -118,7 +118,7 @@ end, ffamaps, capturemaps, ctfmaps)
 
 local clanarena = os.getenv("CHUNGUS_MODE") == "clanarena"
 if clanarena then
-    cs.maprotation("effichold", ffamaps)
+    cs.maprotation("efficteam", ffamaps)
     -- rounds decide the match, keep the chungus map clock from cutting it short
     require "gamemods.chungus".config.game_length = 24 * 60
     require "gamemods.clanarena".on({
@@ -159,23 +159,6 @@ commands.add("flagswitch", function(info)
             " \f1flag switch mode\f7 for the next map (see #help flagswitch).")
     end,
     "Usage: #flagswitch [0|1]: activate flag switch (blue flag spawns in place of red and viceversa) for the next map if mode is ctf or protect (default 1, only masters)")
-
--- keep teams across map changes instead of reshuffling
-
-commands.add("persist", function(info)
-        if info.ci.privilege < server.PRIV_MASTER then playermsg("Access denied.", info.ci) return end
-        if info.args == "" then
-            playermsg("\f6Info\f7: Persist teams is " .. (cs.persistteams == 1 and "enabled" or "disabled") .. ".", info.ci)
-            return
-        end
-        local arg = tonumber(info.args)
-        if arg ~= 0 and arg ~= 1 then playermsg("Invalid persist value", info.ci) return end
-        if cs.persistteams == arg then return end
-        cs.persistteams = arg
-        server.sendservmsg(server.colorname(info.ci, nil) ..
-            (arg == 1 and " enabled" or " disabled") .. " \f1persist teams\f7 ")
-    end,
-    "Usage: #persist [0|1]")
 
 local flagswitch, currentflagswitch = require "gamemods.flagswitch", false
 spaghetti.addhook("entsloaded", function()
