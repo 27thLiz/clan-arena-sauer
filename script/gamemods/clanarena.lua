@@ -8,7 +8,7 @@
 
 ]]--
 
-local fp, L, iterators, playermsg, putf, spawn, setteamscore, settime, commands = require"utils.fp", require"utils.lambda", require"std.iterators", require"std.playermsg", require"std.putf", require"std.spawn", require"std.setteamscore", require"std.settime", require"std.commands"
+local fp, L, iterators, playermsg, putf, spawn, setteamscore, settime, commands, sound = require"utils.fp", require"utils.lambda", require"std.iterators", require"std.playermsg", require"std.putf", require"std.spawn", require"std.setteamscore", require"std.settime", require"std.commands", require"std.sound"
 local map = fp.map
 
 require"std.notalive"
@@ -105,6 +105,7 @@ local function startround()
     if phase ~= "warmup" then return end
     phase = "live"
     server.sendservmsg("\f3FIGHT!")
+    for ci in iterators.clients() do sound(ci, server.S_V_FIGHT, true) end
   end)
   later("timeout", (config.warmup + config.roundtime) * 1000, function()
     if phase ~= "live" then return end
