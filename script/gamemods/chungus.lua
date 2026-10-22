@@ -216,43 +216,43 @@ end)
 
 
 
-commands.add("code", function(info)
-    local client_id = info.ci.extra.uuid
-    if not is_spectator(info.ci) or module.game.is_competitive or module.game.players[client_id].chungid ~= "" then
-        log("WARN", "verification_rejected", "client_id=" .. client_id .. " reason=invalid_player_state")
-        return
-    end
+-- commands.add("code", function(info)
+--     local client_id = info.ci.extra.uuid
+--     if not is_spectator(info.ci) or module.game.is_competitive or module.game.players[client_id].chungid ~= "" then
+--         log("WARN", "verification_rejected", "client_id=" .. client_id .. " reason=invalid_player_state")
+--         return
+--     end
 
-    for chungid, assignment in pairs(module.chunguses) do
-        if info.args == assignment.verification_code and assignment.uuid == "" then
-            assignment.uuid = client_id
-            module.game.players[client_id].chungid = chungid
-            server.unspectate(info.ci)
-            log("INFO", "player_verified",
-                ("client_id=%s chungid=%s"):format(client_id, chungid))
-            return
-        end
-    end
+--     for chungid, assignment in pairs(module.chunguses) do
+--         if info.args == assignment.verification_code and assignment.uuid == "" then
+--             assignment.uuid = client_id
+--             module.game.players[client_id].chungid = chungid
+--             server.unspectate(info.ci)
+--             log("INFO", "player_verified",
+--                 ("client_id=%s chungid=%s"):format(client_id, chungid))
+--             return
+--         end
+--     end
 
-    log("WARN", "verification_rejected", "client_id=" .. client_id .. " reason=invalid_or_used_code")
-end)
+--     log("WARN", "verification_rejected", "client_id=" .. client_id .. " reason=invalid_or_used_code")
+-- end)
 
-commands.add("devcode", function(info)
-    local client_id = info.ci.extra.uuid
-    local debug_chungid = 67
-    module.chunguses[debug_chungid] = {
-        verification_code = 123456,
-        uuid = client_id
-    }
-    module.game.players[client_id].chungid = debug_chungid
-    server.unspectate(info.ci)
-    log("WARN", "player_dev_verified",
-        ("client_id=%s chungid=%s"):format(client_id, tostring(debug_chungid)))
-end)
+-- commands.add("devcode", function(info)
+--     local client_id = info.ci.extra.uuid
+--     local debug_chungid = 67
+--     module.chunguses[debug_chungid] = {
+--         verification_code = 123456,
+--         uuid = client_id
+--     }
+--     module.game.players[client_id].chungid = debug_chungid
+--     server.unspectate(info.ci)
+--     log("WARN", "player_dev_verified",
+--         ("client_id=%s chungid=%s"):format(client_id, tostring(debug_chungid)))
+-- end)
 
-commands.add("devready", function(info)
-    startmatch()
-end)
+-- commands.add("devready", function(info)
+--     startmatch()
+-- end)
 
 commands.add("ready", function(info)
     if module.game.is_competitive or is_spectator(info.ci) then return end
