@@ -69,7 +69,7 @@ Priority-based naming (lower number = loaded first):
 - `hideandseek.lua` — Hide & Seek
 - `zombieoutbreak.lua` — Zombie Outbreak
 - `rugby.lua`, `realrugby.lua` — Rugby variants
-- `clanarena.lua` — Clan Arena (round-based team elimination on efficteam; enabled with `CHUNGUS_MODE=clanarena`)
+- `clanarena.lua` — Clan Arena (round-based team elimination on effichold, for the teammate radar and neutral spawns, flag disabled; dead players are benched to spectator until the next round; enabled with `CHUNGUS_MODE=clanarena`)
 
 ### Key Standard Library (`script/std/`)
 
@@ -110,7 +110,7 @@ Chungus platform events go through `engine.writelog` and use `[chungusmod][LEVEL
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `CHUNGUS` | Enable chungus mode | — |
-| `CHUNGUS_MODE` | `clanarena` switches the rotation to efficteam Clan Arena (rounds, no items, no self-damage) | unset = normal FFA/team rotation with quad armour |
+| `CHUNGUS_MODE` | `clanarena` switches the rotation to effichold Clan Arena on ffa maps (rounds, no items, no self-damage) | unset = normal FFA/team rotation with quad armour |
 | `CHUNGUS_PEER_ADDRESS` | Chungusway address | `host.docker.internal` |
 | `CHUNGUS_PEER_PORT` | Chungusway ENet port | `30000` |
 | `GAME_SERVER_PORT` | Game server port | `28785` |
