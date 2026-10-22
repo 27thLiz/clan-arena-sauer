@@ -28,11 +28,12 @@ local module = {
     armourtype = server.A_YELLOW,
     ammo = nil,       -- nil = efficiency amounts, or { [server.GUN_RL] = n, ... }
     gunselect = server.GUN_CG,
-    teams = { "good", "evil" }
+    teams = { "good", "evil" },
+    maxteamdiff = 1   -- largest team size difference tolerated at round start, false = no autobalance
   }
 }
 
-local hooks, laters, config, enabled = {}, {}
+local hooks, laters, config, enabled, balance = {}, {}
 local phase, wins, round, lastwarned, restoring = "ended", {}, 0, {}, false
 local tryround, endround
 
@@ -126,9 +127,31 @@ local function unbenchall()
   end
 end
 
+-- move the lowest fraggers of the bigger team over, bots are left to the engine bot balance
+local function balanceteams()
+  if not balance then return end
+  local maxdiff = config.maxteamdiff or 1
+  local t1, t2 = config.teams[1], config.teams[2]
+  while true do
+    local n = { [t1] = 0, [t2] = 0 }
+    for ci in iterators.players() do if isteam(ci.team) then n[ci.team] = n[ci.team] + 1 end end
+    if math.abs(n[t1] - n[t2]) <= maxdiff then return end
+    local from = n[t1] > n[t2] and t1 or t2
+    local to = from == t1 and t2 or t1
+    local worst
+    for ci in iterators.players() do
+      if ci.team == from and ci.state.aitype == server.AI_NONE and (not worst or ci.state.frags < worst.state.frags) then worst = ci end
+    end
+    if not worst then return end
+    setteam.set(worst, to, -1, true)  -- keepalive, everyone respawns right after anyway
+    server.sendservmsg(("%s\f7 was moved to %s to balance the teams."):format(server.colorname(worst, nil), teamname(to)))
+  end
+end
+
 local function startround()
   cancellaters()
   unbenchall()
+  balanceteams()
   round, phase, lastwarned = round + 1, "warmup", {}
   for ci in iterators.players() do
     if ci.state.state == engine.CS_ALIVE then
@@ -243,6 +266,7 @@ function module.on(cfg)
   config = {}
   for k, v in pairs(module.defaults) do config[k] = v end
   for k, v in pairs(cfg) do config[k] = v end
+  balance = config.maxteamdiff ~= false
 
   hooks.changemap = spaghetti.addhook("changemap", function()
     laters = {}  -- game laters are freed by the engine on map change
@@ -335,6 +359,17 @@ function module.on(cfg)
 
   hooks.setteam = spaghetti.addhook(server.N_SETTEAM, blockteams)
   hooks.switchteam = spaghetti.addhook(server.N_SWITCHTEAM, blockteams)
+
+  commands.add("balance", function(info)
+    if info.ci.privilege < server.PRIV_MASTER then return playermsg("Access denied.", info.ci) end
+    local arg = info.args == "" and (balance and 0 or 1) or tonumber(info.args)
+    if arg ~= 0 and arg ~= 1 then return playermsg("Usage: #balance [0|1]", info.ci) end
+    if balance == (arg == 1) then
+      return playermsg("\f2Team autobalance\f7 is already " .. (balance and "enabled" or "disabled") .. ".", info.ci)
+    end
+    balance = arg == 1
+    server.sendservmsg(server.colorname(info.ci, nil) .. (balance and " enabled" or " disabled") .. " \f2team autobalance\f7 at round start.")
+  end, "#balance [0|1]: toggle moving players between teams at round start to even them out (only masters)")
 
   commands.add("rules", function(info)
     playermsg("\f2Clan Arena\f7: everyone spawns with every weapon, " .. config.health .. " health and " .. config.armour .. " armour. There are no items.", info.ci)
